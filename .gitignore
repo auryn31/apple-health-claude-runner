@@ -1,0 +1,16 @@
+.env
+env
+_cache/
+__pycache__/
+venv/
+apple_health_export/
+export.zip
+*.zip
+.DS_Store
+
+# Personal Claude Code settings (skills under .claude/skills/ are committed)
+.claude/settings.local.json
+
+# Apple Health exports, anywhere
+export.xml
+export_cda.xml

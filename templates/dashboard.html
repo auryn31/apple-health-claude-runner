@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Training Dashboard</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+  <style>
+    :root {
+      --clr-danger: #dc3545;
+      --clr-warning: #f0ad4e;
+      --clr-success: #28a745;
+      --clr-info: #17a2b8;
+      --clr-muted: #6c757d;
+      --clr-bg-card: #fff;
+      --clr-easy: #28a745;
+      --clr-tempo: #f0ad4e;
+      --clr-hard: #dc3545;
+    }
+    body { padding-top: 0; }
+    .sticky-header {
+      position: sticky; top: 0; z-index: 100;
+      background: var(--pico-background-color);
+      border-bottom: 2px solid var(--pico-muted-border-color);
+      padding: 0.5rem 1rem;
+    }
+    .header-row {
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;
+      max-width: 1400px; margin: 0 auto;
+    }
+    .header-left { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+    .header-left h1 { margin: 0; font-size: 1.2rem; }
+    .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
+    .badge-primary { background: var(--clr-info); color: #fff; }
+    .badge-muted { background: #e9ecef; color: #333; }
+    nav.tabs { display: flex; gap: 0.25rem; flex-wrap: wrap; padding: 0.25rem 1rem; max-width: 1400px; margin: 0 auto; }
+    nav.tabs a {
+      padding: 0.3rem 0.75rem; border-radius: 4px; font-size: 0.85rem; text-decoration: none;
+      color: var(--clr-muted); cursor: pointer;
+    }
+    nav.tabs a:hover, nav.tabs a.active { background: var(--clr-info); color: #fff; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 1rem; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
+    .card {
+      background: var(--clr-bg-card); border: 1px solid var(--pico-muted-border-color);
+      border-radius: 8px; padding: 1rem; text-align: center;
+    }
+    .card .label { font-size: 0.75rem; text-transform: uppercase; color: var(--clr-muted); margin-bottom: 0.25rem; }
+    .card .value { font-size: 1.8rem; font-weight: 700; }
+    .card .sub { font-size: 0.75rem; color: var(--clr-muted); }
+    .card.highlight-green .value { color: var(--clr-success); }
+    .card.highlight-yellow .value { color: var(--clr-warning); }
+    .card.highlight-red .value { color: var(--clr-danger); }
+
+    .suggestions { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.5rem; }
+    .suggestion {
+      padding: 0.75rem 1rem; border-radius: 6px; border-left: 4px solid;
+    }
+    .suggestion.danger { border-color: var(--clr-danger); background: #f8d7da; }
+    .suggestion.warning { border-color: var(--clr-warning); background: #fff3cd; }
+    .suggestion.success { border-color: var(--clr-success); background: #d4edda; }
+    .suggestion.info { border-color: var(--clr-info); background: #d1ecf1; }
+    .suggestion .title { font-weight: 700; margin-bottom: 0.25rem; }
+    .suggestion .text { font-size: 0.9rem; }
+
+    section { margin-bottom: 2rem; scroll-margin-top: 100px; }
+    section h2 { font-size: 1.1rem; border-bottom: 2px solid var(--pico-muted-border-color); padding-bottom: 0.3rem; margin-bottom: 0.25rem; }
+    .chart-info {
+      font-size: 0.8rem; color: var(--clr-muted); margin-bottom: 0.75rem; line-height: 1.5;
+      background: #f8f9fa; border-radius: 6px; padding: 0.5rem 0.75rem;
+    }
+    .chart-info strong { color: #333; }
+    .chart-info .metric-label { font-weight: 600; color: var(--clr-info); }
+    .chart-title { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem; color: #333; }
+
+    .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1rem; }
+    .chart-box {
+      background: var(--clr-bg-card); border: 1px solid var(--pico-muted-border-color);
+      border-radius: 8px; padding: 0.75rem; position: relative; height: 300px;
+    }
+    .chart-box.tall { height: 400px; }
+    .chart-box canvas { width: 100% !important; height: 100% !important; }
+
+    table { font-size: 0.8rem; }
+    th, td { padding: 0.35rem 0.5rem !important; }
+    tr.current { background: #d1ecf1 !important; font-weight: 600; }
+    tr.upcoming { opacity: 0.5; }
+    tr.missed td:first-child { border-left: 3px solid var(--clr-danger); }
+    tr.low td:first-child { border-left: 3px solid var(--clr-warning); }
+    .pct-bar { display: inline-block; height: 6px; border-radius: 3px; vertical-align: middle; }
+
+    .filters { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
+    .filters select { padding: 0.25rem 0.5rem; font-size: 0.8rem; max-width: 200px; }
+
+    .pace-easy { color: var(--clr-easy); font-weight: 600; }
+    .pace-tempo { color: var(--clr-warning); font-weight: 600; }
+    .pace-hard { color: var(--clr-danger); font-weight: 600; }
+
+    .loading { text-align: center; padding: 3rem; color: var(--clr-muted); }
+    .refresh-btn { font-size: 0.8rem; padding: 0.3rem 0.75rem; cursor: pointer; }
+    .refresh-btn:disabled { opacity: 0.5; cursor: wait; }
+
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; margin-bottom: 1rem; }
+    .cal-header { font-size: 0.75rem; font-weight: 600; text-align: center; padding: 0.25rem; color: var(--clr-muted); }
+    .cal-cell {
+      border: 1px solid var(--pico-muted-border-color); border-radius: 4px;
+      padding: 0.35rem; font-size: 0.7rem; min-height: 60px; position: relative;
+    }
+    .cal-cell .cal-date { font-weight: 600; font-size: 0.65rem; color: var(--clr-muted); }
+    .cal-cell .cal-type { font-weight: 700; margin-top: 0.15rem; }
+    .cal-cell .cal-detail { font-size: 0.65rem; color: #555; }
+    .cal-cell.cal-easy { background: rgba(40,167,69,0.1); border-left: 3px solid #28a745; }
+    .cal-cell.cal-long { background: rgba(23,162,184,0.1); border-left: 3px solid #17a2b8; }
+    .cal-cell.cal-tempo, .cal-cell.cal-race_pace { background: rgba(240,173,78,0.1); border-left: 3px solid #f0ad4e; }
+    .cal-cell.cal-race { background: rgba(220,53,69,0.15); border-left: 3px solid #dc3545; }
+    .cal-cell.cal-gym { background: rgba(111,66,193,0.1); border-left: 3px solid #6f42c1; }
+    .cal-cell.cal-rest { background: rgba(200,200,200,0.15); border-left: 3px solid #ccc; }
+    .cal-cell.cal-shakeout { background: rgba(40,167,69,0.06); border-left: 3px solid #a3e4a0; }
+    .cal-cell.cal-today { outline: 2px solid #17a2b8; }
+    .cal-week-label { font-size: 0.7rem; font-weight: 600; color: var(--clr-info); grid-column: 1 / -1; padding: 0.3rem 0 0.1rem; }
+
+    @media (max-width: 600px) {
+      .chart-grid { grid-template-columns: 1fr; }
+      .chart-box { height: 250px; }
+      .cards { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<header class="sticky-header">
+  <div class="header-row">
+    <div class="header-left">
+      <h1>Training Dashboard</h1>
+      <span class="badge badge-primary" id="hdr-week">--</span>
+      <span class="badge badge-muted" id="hdr-countdown">--</span>
+    </div>
+    <button class="refresh-btn" id="refreshBtn" onclick="refreshData()">Refresh Data</button>
+  </div>
+  <nav class="tabs" id="navTabs">
+    <a href="#overview" class="active">Overview</a>
+    <a href="#training">Training</a>
+    <a href="#calendar-section">Calendar</a>
+    <a href="#health">Health</a>
+    <a href="#form">Form</a>
+    <a href="#runs">Runs</a>
+    <a href="#sleep-section">Sleep</a>
+  </nav>
+</header>
+
+<main class="container">
+  <div class="loading" id="loadingMsg">Loading dashboard data...</div>
+  <div id="dashContent" style="display:none;">
+
+    <!-- OVERVIEW -->
+    <section id="overview">
+      <div class="cards" id="summaryCards"></div>
+      <div class="suggestions" id="suggestions"></div>
+    </section>
+
+    <!-- TRAINING -->
+    <section id="training">
+      <h2>Weekly Volume</h2>
+      <div class="chart-info" id="weeklyVolumeInfo"></div>
+      <div class="chart-box tall"><canvas id="weeklyChart"></canvas></div>
+      <div style="overflow-x:auto; margin-top:1rem;">
+        <table id="weeklyTable"><thead></thead><tbody></tbody></table>
+      </div>
+
+      <h2 style="margin-top:1.5rem;">Intensity Distribution</h2>
+      <div class="chart-info">
+        The <strong>80/20 rule</strong>: ~80% of your running should be easy (Z1-Z2, under 150 bpm) and ~20% hard (Z3+).
+        Most beginner runners go too hard too often, which increases injury risk and slows aerobic development.
+        <strong>Green dots</strong> on the pace chart = easy pace (7:00+/km), <strong>yellow</strong> = tempo, <strong>red</strong> = threshold/hard.
+      </div>
+      <div class="chart-grid">
+        <div>
+          <div class="chart-title">Zone Distribution (target: 80% easy)</div>
+          <div class="chart-box"><canvas id="zoneChart"></canvas></div>
+        </div>
+        <div>
+          <div class="chart-title">Pace Trend (outdoor runs >3 km)</div>
+          <div class="chart-box"><canvas id="paceTrendChart"></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CALENDAR -->
+    <section id="calendar-section">
+      <h2>Training Calendar</h2>
+      <div class="chart-info">
+        Your upcoming plan generated from config. Each day shows the planned session.
+        <a href="/api/calendar.ics" download style="margin-left:0.5rem">Download .ics (4 weeks)</a>
+        <a href="/api/calendar-full.ics" download style="margin-left:0.5rem">Download full plan .ics</a>
+      </div>
+      <div id="calendarGrid" class="cal-grid"></div>
+    </section>
+
+    <!-- HEALTH -->
+    <section id="health">
+      <h2>Health Markers</h2>
+      <div class="chart-info">
+        Track trends over weeks, not daily fluctuations. A single bad reading means nothing; a consistent shift means something.
+      </div>
+
+      <div class="chart-grid">
+        <div>
+          <div class="chart-title" id="weight-chart-title">Weight</div>
+          <div class="chart-info" style="margin-bottom:0.4rem">Lose ~0.3 kg/week via mild 300-400 kcal deficit. Don't crash diet. Green band = target zone.</div>
+          <div class="chart-box"><canvas id="weightChart"></canvas></div>
+        </div>
+        <div>
+          <div class="chart-title">VO2max — aerobic fitness capacity</div>
+          <div class="chart-info" style="margin-bottom:0.4rem">How much oxygen your body uses (mL/kg/min). Higher = fitter. <strong>45-50 good</strong>, <strong>50-55 very good</strong>, <strong>55+ excellent</strong> for 32M. Estimated from outdoor runs.</div>
+          <div class="chart-box"><canvas id="vo2Chart"></canvas></div>
+        </div>
+      </div>
+
+      <div class="chart-grid" style="margin-top:1rem">
+        <div>
+          <div class="chart-title">Resting Heart Rate — recovery indicator</div>
+          <div class="chart-info" style="margin-bottom:0.4rem">Lower = stronger heart. Expect <strong>50-65 bpm</strong>. A spike of 5+ bpm over baseline = overtraining, illness, or poor sleep.</div>
+          <div class="chart-box"><canvas id="rhrChart"></canvas></div>
+        </div>
+        <div>
+          <div class="chart-title">Heart Rate Variability (HRV)</div>
+          <div class="chart-info" style="margin-bottom:0.4rem">Variation between heartbeats. <strong>Higher = better recovered</strong>. 40-60 ms typical, 60+ great. <strong>Below 35 ms</strong> = take extra rest.</div>
+          <div class="chart-box"><canvas id="hrvChart"></canvas></div>
+        </div>
+      </div>
+
+      <div class="chart-grid" style="margin-top:1rem">
+        <div>
+          <div class="chart-title">Walking Heart Rate — passive fitness indicator</div>
+          <div class="chart-info" style="margin-bottom:0.4rem">Your average HR during normal walking. <strong>Trends down as you get fitter</strong> — no effort required to measure. More reliable than RHR for long-term fitness tracking.</div>
+          <div class="chart-box"><canvas id="walkingHrChart"></canvas></div>
+        </div>
+        <div>
+          <div class="chart-title">HR Recovery (1 min after exercise)</div>
+          <div class="chart-info" style="margin-bottom:0.4rem">How many bpm your HR drops in the first minute post-exercise. <strong>Higher = better cardiovascular fitness</strong>. Under 12 bpm is poor, 20+ is good, 30+ is excellent.</div>
+          <div class="chart-box"><canvas id="hrRecoveryChart"></canvas></div>
+        </div>
+      </div>
+
+      <div class="chart-grid" style="margin-top:1rem">
+        <div>
+          <div class="chart-title">Respiratory Rate — overnight breathing</div>
+          <div class="chart-info" style="margin-bottom:0.4rem">Breaths per minute during sleep. Normal: <strong>12-20 bpm</strong>. A sudden rise can signal illness, stress, or overtraining before you feel symptoms.</div>
+          <div class="chart-box"><canvas id="respChart"></canvas></div>
+        </div>
+        <div>
+          <div class="chart-title">Blood Oxygen (SpO2)</div>
+          <div class="chart-info" style="margin-bottom:0.4rem">Oxygen saturation. Normal: <strong>95-100%</strong>. Below 95% is concerning. Useful for spotting illness early. Apple Watch measures overnight.</div>
+          <div class="chart-box"><canvas id="spo2Chart"></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RUNNING FORM -->
+    <section id="form">
+      <h2>Running Form & Efficiency</h2>
+      <div class="chart-info">
+        These biomechanics metrics come from the Apple Watch motion sensors during runs.
+        As your form improves: <strong>stride length increases</strong>, <strong>ground contact time decreases</strong>,
+        <strong>vertical oscillation decreases</strong> (less bouncing = more efficient), and <strong>power</strong> at a given pace drops.
+        Don't obsess over individual readings — look for gradual improvement over weeks.
+      </div>
+      <div class="chart-grid">
+        <div>
+          <div class="chart-title">Stride Length (m)</div>
+          <div class="chart-box"><canvas id="strideChart"></canvas></div>
+        </div>
+        <div>
+          <div class="chart-title">Ground Contact Time (ms)</div>
+          <div class="chart-box"><canvas id="gctChart"></canvas></div>
+        </div>
+      </div>
+      <div class="chart-grid" style="margin-top:1rem">
+        <div>
+          <div class="chart-title">Vertical Oscillation (cm)</div>
+          <div class="chart-box"><canvas id="vertOscChart"></canvas></div>
+        </div>
+        <div>
+          <div class="chart-title">Running Power (W)</div>
+          <div class="chart-box"><canvas id="powerChart"></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RUNS -->
+    <section id="runs">
+      <h2>Run Log</h2>
+      <div class="chart-info">
+        All your runs with pace color-coded: <strong style="color:var(--clr-easy)">green = easy (7:00+/km)</strong>,
+        <strong style="color:var(--clr-warning)">yellow = tempo (6:00-7:00)</strong>,
+        <strong style="color:var(--clr-danger)">red = hard (&lt;6:00)</strong>.
+        Most runs should be green. Filter by week or zone to drill into specific training blocks.
+      </div>
+      <div class="filters">
+        <select id="filterWeek"><option value="">All weeks</option></select>
+        <select id="filterZone"><option value="">All zones</option></select>
+        <select id="filterType">
+          <option value="">All types</option>
+          <option value="outdoor">Outdoor</option>
+          <option value="indoor">Indoor</option>
+        </select>
+      </div>
+      <div style="overflow-x:auto;">
+        <table id="runTable"><thead></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <!-- SLEEP -->
+    <section id="sleep-section">
+      <h2>Sleep Trend</h2>
+      <div class="chart-info">
+        Sleep is when your body repairs and adapts to training. Target <strong>7+ hours per night</strong> (green).
+        Consistently under 7 hours raises injury risk, slows recovery, and tanks HRV. Under 6 hours (red) is a training emergency — more sleep will do more for your performance than any workout.
+      </div>
+      <div class="chart-box tall"><canvas id="sleepChart"></canvas></div>
+    </section>
+
+  </div>
+</main>
+
+<script>
+let DATA = null;
+const charts = {};
+
+// ─── Load data ───
+async function loadData() {
+  try {
+    const res = await fetch('/api/data');
+    if (!res.ok) throw new Error('API error');
+    DATA = await res.json();
+    document.getElementById('loadingMsg').style.display = 'none';
+    document.getElementById('dashContent').style.display = 'block';
+    render();
+  } catch (e) {
+    document.getElementById('loadingMsg').textContent = 'Failed to load data. Is the export available?';
+  }
+}
+
+async function refreshData() {
+  const btn = document.getElementById('refreshBtn');
+  btn.disabled = true;
+  btn.textContent = 'Parsing...';
+  try {
+    await fetch('/api/refresh', { method: 'POST' });
+    location.reload();
+  } catch (e) {
+    btn.textContent = 'Error';
+    setTimeout(() => { btn.disabled = false; btn.textContent = 'Refresh Data'; }, 2000);
+  }
+}
+
+// ─── Tab navigation (scroll-aware) ───
+const tabLinks = document.querySelectorAll('nav.tabs a');
+const sectionIds = [...tabLinks].map(a => a.getAttribute('href').slice(1));
+const sectionEls = sectionIds.map(id => document.getElementById(id));
+
+const observer = new IntersectionObserver(entries => {
+  // Find the topmost visible section
+  let best = null;
+  let bestTop = Infinity;
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      const top = entry.boundingClientRect.top;
+      if (top < bestTop) { bestTop = top; best = entry.target.id; }
+    }
+  });
+  if (!best) {
+    // Fallback: pick the section closest to the top of the viewport
+    let minDist = Infinity;
+    sectionEls.forEach(el => {
+      if (!el) return;
+      const dist = Math.abs(el.getBoundingClientRect().top - 100);
+      if (dist < minDist) { minDist = dist; best = el.id; }
+    });
+  }
+  if (best) {
+    tabLinks.forEach(a => {
+      a.classList.toggle('active', a.getAttribute('href') === '#' + best);
+    });
+  }
+}, { rootMargin: '-80px 0px -60% 0px', threshold: 0 });
+
+sectionEls.forEach(el => { if (el) observer.observe(el); });
+
+// ─── Master render ───
+function render() {
+  renderHeader();
+  renderCards();
+  renderSuggestions();
+  renderWeeklyChart();
+  renderWeeklyTable();
+  renderZoneChart();
+  renderCalendar();
+  renderHealthCharts();
+  renderExtraHealthCharts();
+  renderRunningFormCharts();
+  renderPaceTrend();
+  renderRunLog();
+  renderSleepChart();
+}
+
+// ─── Header ───
+function renderHeader() {
+  const w = DATA.current_week;
+  const phase = w ? DATA.weekly.find(x => x.week === w)?.phase : 'Pre-plan';
+  document.getElementById('hdr-week').textContent = w ? `Week ${w} — ${phase}` : 'Pre-plan';
+  document.getElementById('hdr-countdown').textContent = `${DATA.days_to_race} days to race`;
+}
+
+// ─── Summary Cards ───
+function renderCards() {
+  const L = DATA.latest;
+  const WT = DATA.weight_target_kg;
+  const wct = document.getElementById('weight-chart-title');
+  if (wct) wct.textContent = `Weight — target: ${WT} kg by race day`;
+  const cards = [
+    { label: 'Weight', value: L.weight ? `${L.weight} kg` : '--', sub: `Target: ${WT} kg`, hl: L.weight > WT + 3 ? 'red' : L.weight > WT + 1 ? 'yellow' : 'green' },
+    { label: 'VO2max', value: L.vo2max ? `${L.vo2max}` : '--', sub: L.vo2max_date || '', hl: '' },
+    { label: 'Resting HR', value: L.rhr ? `${L.rhr} bpm` : '--', sub: '7-day avg', hl: '' },
+    { label: 'HRV', value: L.hrv ? `${L.hrv} ms` : '--', sub: '7-day avg', hl: L.hrv && L.hrv < 35 ? 'red' : L.hrv && L.hrv < 45 ? 'yellow' : 'green' },
+    { label: 'Sleep', value: L.sleep ? `${Math.floor(L.sleep)}h ${Math.round((L.sleep % 1) * 60)}m` : '--', sub: '7-day avg', hl: L.sleep && L.sleep < 7 ? 'red' : 'green' },
+  ];
+  const el = document.getElementById('summaryCards');
+  el.innerHTML = cards.map(c => `
+    <div class="card ${c.hl ? 'highlight-' + c.hl : ''}">
+      <div class="label">${c.label}</div>
+      <div class="value">${c.value}</div>
+      <div class="sub">${c.sub}</div>
+    </div>
+  `).join('');
+}
+
+// ─── Suggestions ───
+function renderSuggestions() {
+  const el = document.getElementById('suggestions');
+  el.innerHTML = DATA.suggestions.map(s => `
+    <div class="suggestion ${s.type}">
+      <div class="title">${s.title}</div>
+      <div class="text">${s.text}</div>
+    </div>
+  `).join('');
+}
+
+// ─── Calendar Preview ───
+function renderCalendar() {
+  const sched = DATA.plan_schedule;
+  if (!sched || !Object.keys(sched).length) return;
+
+  const grid = document.getElementById('calendarGrid');
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10);
+
+  // Show current week + 3 weeks ahead
+  const startMon = new Date(today);
+  startMon.setDate(startMon.getDate() - startMon.getDay() + 1); // Monday
+  if (startMon > today) startMon.setDate(startMon.getDate() - 7); // If today is Sunday
+
+  let html = '';
+  // Header row
+  html += ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => `<div class="cal-header">${d}</div>`).join('');
+
+  for (let w = 0; w < 4; w++) {
+    const weekStart = new Date(startMon);
+    weekStart.setDate(weekStart.getDate() + w * 7);
+
+    // Week label
+    const firstDay = weekStart.toISOString().slice(0, 10);
+    const firstSession = sched[firstDay];
+    const weekNum = firstSession ? firstSession.week : null;
+    const phase = firstSession ? firstSession.phase : '';
+    if (weekNum) {
+      html += `<div class="cal-week-label">Week ${weekNum} — ${phase}</div>`;
+    } else {
+      html += `<div class="cal-week-label">${weekStart.toLocaleDateString('en', {month:'short', day:'numeric'})}</div>`;
+    }
+
+    for (let d = 0; d < 7; d++) {
+      const date = new Date(weekStart);
+      date.setDate(date.getDate() + d);
+      const dateStr = date.toISOString().slice(0, 10);
+      const session = sched[dateStr];
+      const isToday = dateStr === todayStr;
+
+      if (!session) {
+        html += `<div class="cal-cell cal-rest ${isToday ? 'cal-today' : ''}">
+          <div class="cal-date">${date.getDate()}</div>
+          <div class="cal-type" style="color:#ccc">—</div>
+        </div>`;
+        continue;
+      }
+
+      const stype = session.session_type || session.type;
+      const cls = `cal-${stype}`;
+      let label = '';
+      let detail = '';
+
+      if (session.type === 'run') {
+        const types = {easy:'Easy',long:'Long',tempo:'Tempo',race_pace:'Race Pace',shakeout:'Shakeout',race:'RACE'};
+        label = types[stype] || 'Run';
+        detail = session.distance_km ? `${session.distance_km} km` : '';
+        if (session.pace_target) detail += ` @ ${session.pace_target}`;
+      } else if (session.type === 'gym') {
+        label = 'Strength';
+        detail = session.duration_min ? `${session.duration_min} min` : '';
+      } else {
+        label = 'Rest';
+      }
+
+      html += `<div class="cal-cell ${cls} ${isToday ? 'cal-today' : ''}">
+        <div class="cal-date">${date.getDate()}</div>
+        <div class="cal-type">${label}</div>
+        <div class="cal-detail">${detail}</div>
+      </div>`;
+    }
+  }
+
+  grid.innerHTML = html;
+}
+
+// ─── Weekly Volume Chart ───
+function renderWeeklyChart() {
+  // Dynamic info text
+  const totalWeeks = DATA.weekly.length;
+  const peakWeek = DATA.weekly.reduce((best, w) => w.target_km > best.target_km ? w : best, DATA.weekly[0]);
+  const startKm = DATA.weekly[0].target_km;
+  const infoEl = document.getElementById('weeklyVolumeInfo');
+  infoEl.innerHTML = `Your <strong>${totalWeeks}-week plan</strong> builds from <strong>${startKm} km/week</strong> to a peak of <strong>${peakWeek.target_km} km</strong> (week ${peakWeek.week}), then tapers for race day. Every 4th week is a deload to let your body absorb the training. <strong>Blue bars</strong> = actual km run, <strong>red dashed outline</strong> = weekly target. Gray bars to the left show your pre-plan history.`;
+
+  const ctx = document.getElementById('weeklyChart').getContext('2d');
+  const history = (DATA.history_weekly || []).filter(h => h.actual_km > 0 || h.num_runs > 0);
+  const weeks = DATA.weekly;
+  const histLen = history.length;
+
+  // Combined labels: history weeks + plan weeks
+  const labels = [
+    ...history.map(h => h.label),
+    ...weeks.map(w => `W${w.week}`),
+  ];
+
+  // Target: null for history, stepped line for plan
+  const targetData = [
+    ...history.map(() => null),
+    ...weeks.map(w => w.target_km),
+  ];
+
+  // Actual km for both
+  const actualData = [
+    ...history.map(h => h.actual_km),
+    ...weeks.map(w => w.actual_km),
+  ];
+
+  // Simple color scheme:
+  //   History = neutral gray
+  //   Completed plan weeks = blue (single color, the % is shown in tooltip/table)
+  //   Current week = bright teal with border
+  //   Future weeks = very light dotted outline only
+  const actualColors = [];
+  const actualBorders = [];
+  const actualBorderW = [];
+  for (let i = 0; i < histLen; i++) {
+    actualColors.push('rgba(158,168,178,0.5)');
+    actualBorders.push('rgba(130,140,150,0.6)');
+    actualBorderW.push(1);
+  }
+  for (const w of weeks) {
+    if (w.status === 'current') {
+      actualColors.push('rgba(23,162,184,0.75)');
+      actualBorders.push('#0d8ea9');
+      actualBorderW.push(2);
+    } else if (w.status === 'upcoming') {
+      actualColors.push('rgba(200,200,200,0.15)');
+      actualBorders.push('rgba(180,180,180,0.3)');
+      actualBorderW.push(1);
+    } else {
+      // Past plan weeks — solid blue
+      actualColors.push('rgba(52,120,198,0.7)');
+      actualBorders.push('rgba(40,100,175,0.8)');
+      actualBorderW.push(1);
+    }
+  }
+
+  // Divider annotation between history and plan
+  const planStartIdx = histLen - 0.5;
+
+  charts.weekly = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Plan target',
+          data: targetData,
+          backgroundColor: 'rgba(0,0,0,0)',
+          borderColor: 'rgba(220,53,69,0.6)',
+          borderWidth: 2,
+          borderRadius: 3,
+          borderDash: [4, 3],
+          borderSkipped: false,
+          order: 2,
+        },
+        {
+          label: 'Actual km',
+          data: actualData,
+          backgroundColor: actualColors,
+          borderColor: actualBorders,
+          borderWidth: actualBorderW,
+          borderRadius: 3,
+          order: 1,
+        },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const i = items[0].dataIndex;
+              if (i < histLen) {
+                const h = history[i];
+                return `${h.start} — ${h.end}`;
+              }
+              const w = weeks[i - histLen];
+              return `Week ${w.week}: ${w.phase} (${w.start} — ${w.end})`;
+            },
+            afterLabel: (ctx) => {
+              const i = ctx.dataIndex;
+              if (ctx.datasetIndex === 1) {
+                if (i < histLen) {
+                  const h = history[i];
+                  return `${h.num_runs} runs | longest: ${h.longest} km`;
+                }
+                const w = weeks[i - histLen];
+                return `${w.pct}% of target | ${w.num_runs} runs | longest: ${w.longest} km`;
+              }
+            }
+          }
+        },
+        annotation: histLen > 0 ? {
+          annotations: {
+            planStart: {
+              type: 'line',
+              xMin: planStartIdx, xMax: planStartIdx,
+              borderColor: '#555', borderWidth: 1.5, borderDash: [6, 4],
+              label: {
+                display: true, content: 'Plan start', position: 'start',
+                font: { size: 10, weight: 'bold' }, color: '#555', backgroundColor: 'rgba(255,255,255,0.85)',
+              },
+            }
+          }
+        } : undefined,
+      },
+      scales: {
+        y: { beginAtZero: true, title: { display: true, text: 'km' } },
+        x: { grid: { display: false } },
+      },
+    },
+  });
+}
+
+// ─── Weekly Table ───
+function renderWeeklyTable() {
+  const table = document.getElementById('weeklyTable');
+  table.querySelector('thead').innerHTML = `<tr>
+    <th>Wk</th><th>Phase</th><th>Runs</th><th>Actual</th><th>Target</th><th>%</th>
+    <th>Longest</th><th>Tgt Long</th><th>Easy%</th><th>Gym</th><th>Status</th>
+  </tr>`;
+  const tbody = table.querySelector('tbody');
+  tbody.innerHTML = DATA.weekly.map(w => {
+    const cls = w.status === 'current' ? 'current' : (w.status === 'upcoming' ? 'upcoming' : (w.status === 'missed' ? 'missed' : (w.status === 'low' ? 'low' : '')));
+    const pctColor = w.pct >= 85 ? 'var(--clr-success)' : w.pct >= 60 ? 'var(--clr-warning)' : 'var(--clr-danger)';
+    const pctWidth = Math.min(w.pct, 100);
+    const gymColor = (w.gym_actual >= w.gym_target) ? 'var(--clr-success)' : w.gym_actual > 0 ? 'var(--clr-warning)' : 'var(--clr-muted)';
+    return `<tr class="${cls}">
+      <td>${w.week}</td><td>${w.phase}</td><td>${w.num_runs}</td>
+      <td>${w.actual_km}</td><td>${w.target_km}</td>
+      <td>${w.pct}% <span class="pct-bar" style="width:${pctWidth * 0.4}px;background:${pctColor}"></span></td>
+      <td>${w.longest}</td><td>${w.target_long}</td>
+      <td>${w.easy_pct !== null ? w.easy_pct + '%' : '-'}</td>
+      <td style="color:${gymColor};font-weight:600">${w.gym_actual}/${w.gym_target}</td>
+      <td>${w.status}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── Zone Doughnut ───
+function renderZoneChart() {
+  const ctx = document.getElementById('zoneChart').getContext('2d');
+  const zd = DATA.zone_distribution;
+  const labels = ['Z1 Recovery', 'Z2 Easy', 'Z3 Tempo', 'Z4 Threshold', 'Z5 VO2max'];
+  const values = [zd.Z1, zd.Z2, zd.Z3, zd.Z4, zd.Z5];
+  const total = values.reduce((a, b) => a + b, 0);
+  const easyPct = total > 0 ? Math.round((zd.Z1 + zd.Z2) / total * 100) : 0;
+  const colors = ['#a3e4a0', '#28a745', '#f0ad4e', '#fd7e14', '#dc3545'];
+
+  charts.zone = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 1 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { boxWidth: 10, font: { size: 11 } } },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${ctx.raw.toFixed(1)} km (${total > 0 ? Math.round(ctx.raw/total*100) : 0}%)` } },
+      },
+    },
+    plugins: [{
+      id: 'centerText',
+      afterDraw(chart) {
+        const { ctx, chartArea: { left, right, top, bottom } } = chart;
+        const cx = (left + right) / 2, cy = (top + bottom) / 2;
+        ctx.save();
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = 'bold 24px sans-serif';
+        ctx.fillStyle = easyPct >= 80 ? '#28a745' : easyPct >= 70 ? '#f0ad4e' : '#dc3545';
+        ctx.fillText(`${easyPct}%`, cx, cy - 8);
+        ctx.font = '12px sans-serif';
+        ctx.fillStyle = '#666';
+        ctx.fillText('easy', cx, cy + 12);
+        ctx.restore();
+      }
+    }],
+  });
+}
+
+// ─── Health Charts ───
+function renderHealthCharts() {
+  // Weight
+  if (DATA.weight.length) {
+    const ctx = document.getElementById('weightChart').getContext('2d');
+    charts.weight = new Chart(ctx, {
+      type: 'line',
+      data: {
+        datasets: [{
+          label: 'Weight (kg)',
+          data: DATA.weight.map(d => ({ x: d.date, y: d.value })),
+          borderColor: '#17a2b8', backgroundColor: 'rgba(23,162,184,0.1)',
+          fill: true, tension: 0.3, pointRadius: 2,
+        }]
+      },
+      options: timeChartOpts('kg', [
+        { y: 79, label: 'Target low', color: '#28a745' },
+        { y: 80, label: 'Target high', color: '#28a745' },
+      ], true),
+    });
+  }
+
+  // VO2max
+  if (DATA.vo2max.length) {
+    const ctx = document.getElementById('vo2Chart').getContext('2d');
+    charts.vo2 = new Chart(ctx, {
+      type: 'line',
+      data: {
+        datasets: [{
+          label: 'VO2max',
+          data: DATA.vo2max.map(d => ({ x: d.date, y: d.value })),
+          borderColor: '#6f42c1', backgroundColor: 'rgba(111,66,193,0.1)',
+          fill: true, tension: 0.3, pointRadius: 3,
+        }]
+      },
+      options: timeChartOpts('mL/min/kg', [
+        { y: 50, label: 'Very good (50)', color: '#28a745' },
+        { y: 55, label: 'Excellent (55)', color: '#6f42c1' },
+      ], true),
+    });
+  }
+
+  // RHR
+  if (DATA.rhr.length) {
+    const ctx = document.getElementById('rhrChart').getContext('2d');
+    // Compute 7-day rolling average
+    const sorted = [...DATA.rhr].sort((a, b) => a.date.localeCompare(b.date));
+    const rolling = sorted.map((d, i) => {
+      const window = sorted.slice(Math.max(0, i - 6), i + 1);
+      const avg = window.reduce((s, w) => s + w.value, 0) / window.length;
+      return { x: d.date, y: Math.round(avg * 10) / 10 };
+    });
+    charts.rhr = new Chart(ctx, {
+      type: 'line',
+      data: {
+        datasets: [
+          { label: 'RHR (daily)', data: sorted.map(d => ({ x: d.date, y: d.value })), borderColor: 'rgba(220,53,69,0.3)', pointRadius: 1, borderWidth: 1 },
+          { label: 'RHR (7-day avg)', data: rolling, borderColor: '#dc3545', pointRadius: 0, borderWidth: 2 },
+        ]
+      },
+      options: timeChartOpts('bpm', [
+        { y: 50, label: 'Athletic (<50)', color: '#28a745' },
+      ]),
+    });
+  }
+
+  // HRV
+  if (DATA.hrv.length) {
+    const ctx = document.getElementById('hrvChart').getContext('2d');
+    const sorted = [...DATA.hrv].sort((a, b) => a.date.localeCompare(b.date));
+    const rolling = sorted.map((d, i) => {
+      const window = sorted.slice(Math.max(0, i - 6), i + 1);
+      const avg = window.reduce((s, w) => s + w.value, 0) / window.length;
+      return { x: d.date, y: Math.round(avg * 10) / 10 };
+    });
+    charts.hrv = new Chart(ctx, {
+      type: 'line',
+      data: {
+        datasets: [
+          { label: 'HRV (daily)', data: sorted.map(d => ({ x: d.date, y: d.value })), borderColor: 'rgba(40,167,69,0.3)', pointRadius: 1, borderWidth: 1 },
+          { label: 'HRV (7-day avg)', data: rolling, borderColor: '#28a745', pointRadius: 0, borderWidth: 2 },
+        ]
+      },
+      options: timeChartOpts('ms', [{ y: 35, label: 'Danger zone', color: '#dc3545' }]),
+    });
+  }
+}
+
+function timeChartOpts(unit, annotationLines, hideLegend) {
+  const annotations = {};
+  if (annotationLines) {
+    annotationLines.forEach((line, i) => {
+      annotations[`line${i}`] = {
+        type: 'line',
+        yMin: line.y, yMax: line.y,
+        borderColor: line.color,
+        borderWidth: 1.5,
+        borderDash: [5, 3],
+        label: { display: true, content: line.label, position: 'start', font: { size: 10 }, color: line.color, backgroundColor: 'transparent' }
+      };
+    });
+  }
+
+  return {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: hideLegend ? { display: false } : { labels: { boxWidth: 10, font: { size: 11 } } },
+      annotation: Object.keys(annotations).length ? { annotations } : undefined,
+    },
+    scales: {
+      x: { type: 'time', time: { unit: 'week', tooltipFormat: 'MMM d, yyyy' }, grid: { display: false } },
+      y: { title: { display: true, text: unit } },
+    },
+  };
+}
+
+// ─── Extra Health Charts (walking HR, HR recovery, resp rate, SpO2) ───
+function renderExtraHealthCharts() {
+  // Walking HR
+  if (DATA.walking_hr && DATA.walking_hr.length) {
+    const ctx = document.getElementById('walkingHrChart').getContext('2d');
+    const sorted = [...DATA.walking_hr].sort((a, b) => a.date.localeCompare(b.date));
+    const rolling = sorted.map((d, i) => {
+      const w = sorted.slice(Math.max(0, i - 6), i + 1);
+      return { x: d.date, y: Math.round(w.reduce((s, v) => s + v.value, 0) / w.length) };
+    });
+    charts.walkingHr = new Chart(ctx, {
+      type: 'line',
+      data: { datasets: [
+        { label: 'Daily', data: sorted.map(d => ({ x: d.date, y: d.value })), borderColor: 'rgba(255,127,14,0.3)', pointRadius: 1, borderWidth: 1 },
+        { label: '7-day avg', data: rolling, borderColor: '#ff7f0e', pointRadius: 0, borderWidth: 2 },
+      ]},
+      options: timeChartOpts('bpm'),
+    });
+  }
+
+  // HR Recovery
+  if (DATA.hr_recovery && DATA.hr_recovery.length) {
+    const ctx = document.getElementById('hrRecoveryChart').getContext('2d');
+    const sorted = [...DATA.hr_recovery].sort((a, b) => a.date.localeCompare(b.date));
+    charts.hrRecovery = new Chart(ctx, {
+      type: 'scatter',
+      data: { datasets: [{
+        label: 'HR Recovery (bpm drop)',
+        data: sorted.map(d => ({ x: d.date, y: d.value })),
+        backgroundColor: sorted.map(d => d.value >= 30 ? '#28a745' : d.value >= 20 ? '#f0ad4e' : '#dc3545'),
+        pointRadius: 5,
+      }]},
+      options: timeChartOpts('bpm', [
+        { y: 20, label: 'Good (20+)', color: '#28a745' },
+        { y: 30, label: 'Excellent (30+)', color: '#6f42c1' },
+      ], true),
+    });
+  }
+
+  // Respiratory Rate
+  if (DATA.respiratory_rate && DATA.respiratory_rate.length) {
+    const ctx = document.getElementById('respChart').getContext('2d');
+    const sorted = [...DATA.respiratory_rate].sort((a, b) => a.date.localeCompare(b.date));
+    const rolling = sorted.map((d, i) => {
+      const w = sorted.slice(Math.max(0, i - 6), i + 1);
+      return { x: d.date, y: Math.round(w.reduce((s, v) => s + v.value, 0) / w.length * 10) / 10 };
+    });
+    charts.resp = new Chart(ctx, {
+      type: 'line',
+      data: { datasets: [
+        { label: 'Daily', data: sorted.map(d => ({ x: d.date, y: d.value })), borderColor: 'rgba(148,103,189,0.3)', pointRadius: 1, borderWidth: 1 },
+        { label: '7-day avg', data: rolling, borderColor: '#9467bd', pointRadius: 0, borderWidth: 2 },
+      ]},
+      options: timeChartOpts('breaths/min', [
+        { y: 12, label: 'Low normal', color: '#28a745' },
+        { y: 20, label: 'High normal', color: '#f0ad4e' },
+      ]),
+    });
+  }
+
+  // SpO2
+  if (DATA.spo2 && DATA.spo2.length) {
+    const ctx = document.getElementById('spo2Chart').getContext('2d');
+    const sorted = [...DATA.spo2].sort((a, b) => a.date.localeCompare(b.date));
+    charts.spo2 = new Chart(ctx, {
+      type: 'line',
+      data: { datasets: [{
+        label: 'SpO2',
+        data: sorted.map(d => ({ x: d.date, y: d.value })),
+        borderColor: '#e377c2', backgroundColor: 'rgba(227,119,194,0.1)',
+        fill: true, tension: 0.3, pointRadius: 2,
+      }]},
+      options: timeChartOpts('%', [
+        { y: 95, label: 'Concern threshold', color: '#dc3545' },
+      ], true),
+    });
+  }
+}
+
+// ─── Running Form Charts ───
+function renderRunningFormCharts() {
+  // Filter to outdoor runs with form data
+  const runs = DATA.runs.filter(r => !r.indoor && r.dist > 1.5).sort((a, b) => a.date.localeCompare(b.date));
+
+  function formScatter(canvasId, field, unit, color, refLines) {
+    const data = runs.filter(r => r[field] != null);
+    if (!data.length) return;
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    new Chart(ctx, {
+      type: 'scatter',
+      data: { datasets: [{
+        label: unit,
+        data: data.map(r => ({ x: r.date, y: r[field] })),
+        backgroundColor: color + '99',
+        borderColor: color,
+        pointRadius: 4,
+      }]},
+      options: timeChartOpts(unit, refLines, true),
+    });
+  }
+
+  formScatter('strideChart', 'stride', 'm', '#1f77b4', [
+    { y: 1.0, label: 'Short (<1.0m)', color: '#f0ad4e' },
+  ]);
+  formScatter('gctChart', 'gct', 'ms', '#2ca02c', [
+    { y: 250, label: 'Good (<250ms)', color: '#28a745' },
+    { y: 300, label: 'Average (300ms)', color: '#f0ad4e' },
+  ]);
+  formScatter('vertOscChart', 'vert_osc', 'cm', '#d62728', [
+    { y: 8, label: 'Efficient (<8cm)', color: '#28a745' },
+    { y: 10, label: 'Average (10cm)', color: '#f0ad4e' },
+  ]);
+  formScatter('powerChart', 'power', 'W', '#ff7f0e');
+}
+
+// ─── Pace Trend ───
+function renderPaceTrend() {
+  const outdoor = DATA.runs.filter(r => !r.indoor && r.dist > 3 && r.pace_sec);
+  if (!outdoor.length) return;
+
+  const ctx = document.getElementById('paceTrendChart').getContext('2d');
+  charts.pace = new Chart(ctx, {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: 'Pace (min/km)',
+        data: outdoor.map(r => ({ x: r.date, y: r.pace_sec / 60 })),
+        backgroundColor: outdoor.map(r => {
+          const p = r.pace_sec / 60;
+          return p >= 7 ? '#28a745' : p >= 6 ? '#f0ad4e' : '#dc3545';
+        }),
+        pointRadius: 5,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const r = outdoor[ctx.dataIndex];
+              return `${r.pace} /km | ${r.dist} km | HR: ${r.avg_hr || '-'}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { type: 'time', time: { unit: 'week', tooltipFormat: 'MMM d' }, grid: { display: false } },
+        y: {
+          reverse: true,
+          title: { display: true, text: 'Pace (min/km)' },
+          ticks: {
+            callback: v => {
+              const m = Math.floor(v);
+              const s = Math.round((v - m) * 60);
+              return `${m}:${s.toString().padStart(2, '0')}`;
+            }
+          }
+        },
+      },
+    },
+  });
+}
+
+// ─── Run Log ───
+function renderRunLog() {
+  // Populate filter options
+  const weekSelect = document.getElementById('filterWeek');
+  const usedWeeks = [...new Set(DATA.runs.filter(r => r.week).map(r => r.week))].sort((a, b) => a - b);
+  usedWeeks.forEach(w => {
+    const opt = document.createElement('option');
+    opt.value = w; opt.textContent = `Week ${w}`;
+    weekSelect.appendChild(opt);
+  });
+  const zoneSelect = document.getElementById('filterZone');
+  ['Z1', 'Z2', 'Z3', 'Z4', 'Z5'].forEach(z => {
+    const opt = document.createElement('option');
+    opt.value = z; opt.textContent = z;
+    zoneSelect.appendChild(opt);
+  });
+
+  const applyFilters = () => {
+    const wf = weekSelect.value;
+    const zf = zoneSelect.value;
+    const tf = document.getElementById('filterType').value;
+    let filtered = DATA.runs;
+    if (wf) filtered = filtered.filter(r => r.week === parseInt(wf));
+    if (zf) filtered = filtered.filter(r => r.zone === zf);
+    if (tf === 'outdoor') filtered = filtered.filter(r => !r.indoor);
+    if (tf === 'indoor') filtered = filtered.filter(r => r.indoor);
+    fillRunTable(filtered);
+  };
+
+  weekSelect.addEventListener('change', applyFilters);
+  zoneSelect.addEventListener('change', applyFilters);
+  document.getElementById('filterType').addEventListener('change', applyFilters);
+
+  fillRunTable(DATA.runs);
+}
+
+function fillRunTable(runs) {
+  const table = document.getElementById('runTable');
+  table.querySelector('thead').innerHTML = `<tr>
+    <th>Date</th><th>Dist</th><th>Duration</th><th>Pace</th><th>Avg HR</th><th>Max HR</th><th>Zone</th><th>Cal</th><th>Type</th><th>Week</th>
+  </tr>`;
+  const sorted = [...runs].sort((a, b) => b.date.localeCompare(a.date));
+  table.querySelector('tbody').innerHTML = sorted.map(r => {
+    const durM = Math.floor(r.dur);
+    const durS = Math.round((r.dur - durM) * 60);
+    let paceCls = '';
+    if (r.pace_sec) {
+      const pm = r.pace_sec / 60;
+      paceCls = pm >= 7 ? 'pace-easy' : pm >= 6 ? 'pace-tempo' : 'pace-hard';
+    }
+    return `<tr>
+      <td>${r.date}</td><td>${r.dist.toFixed(1)} km</td><td>${durM}:${durS.toString().padStart(2,'0')}</td>
+      <td class="${paceCls}">${r.pace || '-'}</td>
+      <td>${r.avg_hr || '-'}</td><td>${r.max_hr || '-'}</td><td>${r.zone}</td>
+      <td>${r.cal}</td><td>${r.indoor ? 'Indoor' : 'Outdoor'}</td><td>${r.week || '-'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── Sleep Chart ───
+function renderSleepChart() {
+  if (!DATA.sleep.length) return;
+
+  // Show last 60 nights max
+  const recent = DATA.sleep.slice(-60);
+  const ctx = document.getElementById('sleepChart').getContext('2d');
+  charts.sleep = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: recent.map(s => s.date),
+      datasets: [{
+        label: 'Sleep (hours)',
+        data: recent.map(s => Math.round(s.value * 10) / 10),
+        backgroundColor: recent.map(s => s.value >= 7 ? 'rgba(40,167,69,0.6)' : s.value >= 6 ? 'rgba(240,173,78,0.6)' : 'rgba(220,53,69,0.6)'),
+        borderRadius: 2,
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        annotation: {
+          annotations: {
+            target: {
+              type: 'line', yMin: 7, yMax: 7,
+              borderColor: '#28a745', borderWidth: 1.5, borderDash: [5, 3],
+              label: { display: true, content: '7h target', position: 'start', font: { size: 10 } },
+            }
+          }
+        }
+      },
+      scales: {
+        x: { type: 'time', time: { unit: 'day', tooltipFormat: 'MMM d' }, grid: { display: false }, ticks: { maxTicksLimit: 15 } },
+        y: { beginAtZero: true, title: { display: true, text: 'hours' } },
+      },
+    },
+  });
+}
+
+// ─── Init ───
+loadData();
+</script>
+
+
+</body>
+</html>
